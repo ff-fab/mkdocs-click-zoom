@@ -1,0 +1,3 @@
+site_name: Click-Zoom Test Site
+plugins:
+  - click-zoom

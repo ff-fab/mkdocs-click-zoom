@@ -1,0 +1,62 @@
+/* click-zoom — Overlay and cursor styles ---------------------------------- */
+
+/* Cursor hint — signal clickability on all zoomable elements */
+[data-click-zoom] {
+  cursor: zoom-in;
+  transition: opacity 0.15s ease;
+}
+[data-click-zoom]:hover {
+  opacity: 0.85;
+}
+
+/* Fullscreen overlay */
+.click-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.click-zoom-overlay.active {
+  opacity: 1;
+}
+
+/* Content container inside overlay */
+.click-zoom-content {
+  max-width: 92vw;
+  max-height: 92vh;
+  overflow: auto;
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.4));
+  background: var(--md-default-bg-color, #fff);
+  border-radius: 8px;
+  padding: 1.5rem;
+  cursor: default;
+}
+.click-zoom-content svg {
+  display: block;
+  max-width: 88vw !important;
+  max-height: 85vh !important;
+  height: auto !important;
+}
+.click-zoom-content img {
+  display: block;
+  max-width: 88vw;
+  max-height: 85vh;
+  height: auto;
+}
+
+/* Close hint */
+.click-zoom-close {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  font: 500 0.9rem/1 var(--md-text-font-family, system-ui, sans-serif);
+  pointer-events: none;
+  user-select: none;
+}
