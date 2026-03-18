@@ -15,8 +15,10 @@ Click-to-fullscreen zoom overlay for diagrams, SVGs, and images in MkDocs.
 
 ## Installation
 
+Install directly from the GitHub repository:
+
 ```bash
-pip install mkdocs-click-zoom
+pip install git+https://github.com/ff-fab/mkdocs-click-zoom.git
 ```
 
 ## Usage
