@@ -12,6 +12,7 @@
   var prevOverflow = "";
   var sourcesByPath = {};
   var probeGeneration = 0;
+  var probeCache = {}; // source text → naturalWidth (0 = unknown/allow zoom)
   var selectors = window.__clickZoomSelectors || [
     ".mermaid",
     "article svg",
@@ -120,7 +121,8 @@
   }
 
   /* Probe-renders each captured Mermaid source to measure its natural width,
-   * then applies data-click-zoom only if the overlay would show it larger.  */
+   * then applies data-click-zoom only if the overlay would show it larger.
+   * Renders are sequenced (not concurrent) to avoid flooding the UI thread.  */
   function applyMermaidZoomHints(generation) {
     if (typeof mermaid === "undefined") return;
 
@@ -129,55 +131,76 @@
 
     var mermaidEls = document.querySelectorAll(".mermaid");
 
+    var chain = Promise.resolve();
     Array.prototype.forEach.call(mermaidEls, function (el, index) {
-      if (generation !== probeGeneration) return;
+      chain = chain.then(function () {
+        if (generation !== probeGeneration) return;
 
-      var source = sources[index];
-      if (!source) {
-        el.setAttribute("data-click-zoom", "");
-        return;
-      }
+        var source = sources[index];
+        if (!source) {
+          el.setAttribute("data-click-zoom", "");
+          return;
+        }
 
-      var probeId = "__click_zoom_probe_" + generation + "_" + index;
-
-      mermaid
-        .render(probeId, source)
-        .then(function (result) {
-          if (generation !== probeGeneration) return;
-
-          // Clean up any stray element Mermaid inserted during render
-          var stray = document.getElementById(probeId);
-          if (stray && stray.parentNode) stray.parentNode.removeChild(stray);
-
-          var naturalWidth = 0;
-          // Primary: max-width:Npx in SVG style attribute (Mermaid 11+)
-          var mwMatch = result.svg.match(/max-width:\s*([\d.]+)px/);
-          if (mwMatch) naturalWidth = parseFloat(mwMatch[1]);
-          // Fallback: viewBox="x y w h" — third token is width
-          if (naturalWidth === 0) {
-            var vbMatch = result.svg.match(
-              /viewBox="[\d.\-]+\s+[\d.\-]+\s+([\d.]+)/
-            );
-            if (vbMatch) naturalWidth = parseFloat(vbMatch[1]);
-          }
-
+        // Return cached result without re-rendering
+        if (Object.prototype.hasOwnProperty.call(probeCache, source)) {
+          var cached = probeCache[source];
           var renderedWidth = el.getBoundingClientRect().width;
-          if (naturalWidth === 0 || naturalWidth > renderedWidth + ZOOM_THRESHOLD) {
+          if (cached === 0 || cached > renderedWidth + ZOOM_THRESHOLD) {
             el.setAttribute("data-click-zoom", "");
           }
-        })
-        .catch(function () {
-          if (generation !== probeGeneration) return;
-          var stray = document.getElementById(probeId);
-          if (stray && stray.parentNode) stray.parentNode.removeChild(stray);
-          el.setAttribute("data-click-zoom", ""); // render failed — allow zoom
-        });
+          return;
+        }
+
+        var probeId = "__click_zoom_probe_" + generation + "_" + index;
+
+        return mermaid
+          .render(probeId, source)
+          .then(function (result) {
+            if (generation !== probeGeneration) return;
+
+            // Clean up any stray element Mermaid inserted during render
+            var stray = document.getElementById(probeId);
+            if (stray && stray.parentNode) stray.parentNode.removeChild(stray);
+
+            var naturalWidth = 0;
+            // Primary: max-width:Npx in SVG style attribute (Mermaid 11+)
+            var mwMatch = result.svg.match(/max-width:\s*([\d.]+)px/);
+            if (mwMatch) naturalWidth = parseFloat(mwMatch[1]);
+            // Fallback: viewBox="x y w h" — third token is width
+            if (naturalWidth === 0) {
+              var vbMatch = result.svg.match(
+                /viewBox="[\d.\-]+\s+[\d.\-]+\s+([\d.]+)/
+              );
+              if (vbMatch) naturalWidth = parseFloat(vbMatch[1]);
+            }
+
+            probeCache[source] = naturalWidth;
+
+            var renderedWidth = el.getBoundingClientRect().width;
+            if (naturalWidth === 0 || naturalWidth > renderedWidth + ZOOM_THRESHOLD) {
+              el.setAttribute("data-click-zoom", "");
+            }
+          })
+          .catch(function () {
+            if (generation !== probeGeneration) return;
+            var stray = document.getElementById(probeId);
+            if (stray && stray.parentNode) stray.parentNode.removeChild(stray);
+            probeCache[source] = 0; // treat failed render as unknown — allow zoom
+            el.setAttribute("data-click-zoom", "");
+          });
+      });
     });
   }
 
   /* Polls until Mermaid has finished rendering all diagrams, then probes.
    * The .mermaid code selector goes to zero when processing completes.     */
   function waitForMermaidThenProbe(generation) {
+    // No diagrams on this page — nothing to probe
+    if (document.querySelectorAll(".mermaid").length === 0) return;
+    var sources = sourcesByPath[window.location.pathname];
+    if (!sources || sources.length === 0) return;
+
     var attempts = 0;
 
     function poll() {
@@ -401,6 +424,7 @@
 
       var matched = findMatchingAncestor(e.target, selectors);
       if (!matched) return;
+      if (!matched.hasAttribute("data-click-zoom")) return;
 
       e.preventDefault();
       e.stopPropagation();
