@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mkdocs-click-zoom"
-version = "0.1.0"
+version = "0.2.0"
 description = "Click-to-fullscreen zoom overlay for diagrams and SVGs in MkDocs"
 readme = "README.md"
 license = "MIT"
